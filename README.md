@@ -1,5 +1,7 @@
 # Resume SQL Detection Model
 
+[![Open in Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://share.streamlit.io/deploy?repository=lalamansingh/Resume-Detection-ATS-Scoring-System-&branch=main&mainModule=streamlit_app.py)
+
 This project provides a model to detect SQL injection in resumes and compute an ATS (Applicant Tracking System) score.
 
 ## Features

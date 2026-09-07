@@ -14,6 +14,19 @@ st.set_page_config(
     layout="wide"
 )
 
+@st.cache_resource
+def get_sql_detector():
+    return SQLInjectionDetector()
+
+@st.cache_resource
+def get_prompt_detector():
+    return PromptInjectionDetector()
+
+@st.cache_resource
+def get_ats_scorer():
+    return ATSScorer()
+
+
 # Title and description
 st.title("📄 Resume Security & ATS Scoring System")
 st.markdown("""
@@ -84,12 +97,12 @@ if st.button("🔍 Analyze Resume", type="primary"):
 
             # SQL Injection Detection
             with st.spinner("Checking for SQL injection..."):
-                sql_detector = SQLInjectionDetector()
+                sql_detector = get_sql_detector()
                 sql_is_malicious, sql_matches = sql_detector.detect(resume_text)
 
             # Prompt Injection Detection
             with st.spinner("Checking for prompt injection..."):
-                prompt_detector = PromptInjectionDetector()
+                prompt_detector = get_prompt_detector()
                 prompt_is_malicious, prompt_matches = prompt_detector.detect(resume_text)
 
             # Display SQL injection results
@@ -154,7 +167,7 @@ if st.button("🔍 Analyze Resume", type="primary"):
                     with open(job_desc_path, 'r', encoding='utf-8') as f:
                         job_description = f.read()
 
-                scorer = ATSScorer()
+                scorer = get_ats_scorer()
                 scores = scorer.score_resume(text_to_score, job_description)
 
             # Display ATS scores

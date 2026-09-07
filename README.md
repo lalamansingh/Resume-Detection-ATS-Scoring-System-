@@ -1,124 +1,107 @@
-# Resume SQL Detection Model
+# Resume Security & ATS Scoring System
 
 [![Open in Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://share.streamlit.io/deploy?repository=lalamansingh/Resume-Detection-ATS-Scoring-System-&branch=main&mainModule=streamlit_app.py)
 
-This project provides a model to detect SQL injection in resumes and compute an ATS (Applicant Tracking System) score.
+An intelligent, AI-powered system to detect security threats (SQL Injection and Prompt Injection) in resumes, calculate precision ATS (Applicant Tracking System) scores against a target Job Description, identify specific resume mistakes, and provide actionable recommendations to boost your score.
 
-## Features
+---
 
-- **Resume Parsing**: Extract text from PDF, DOCX, and TXT files.
-- **SQL Injection Detection**: Identify potential SQL injection attempts using rule-based regex patterns.
-- **Text Sanitization**: Remove detected SQL injection patterns to sanitize resume input.
-- **ATS Scoring**: Evaluate how well a resume would perform in an ATS based on:
-  - Section presence (contact, experience, experience, education, skills)
-  - Keyword density (ATS-relevant keywords)
-  - Resume length
-  - Optional semantic similarity with a job description (using sentence-transformers)
+## 🚀 Key Features
 
-## Installation
+- **Resume & Job Description Parsing**: Extract clean text from PDF, DOCX, and TXT files.
+- **Security Threat Detection**:
+  - **SQL Injection Detection**: Detects SQL injection attempts in resume content.
+  - **Prompt Injection Detection**: Identifies adversarial prompts aimed at manipulating downstream LLM screening systems.
+  - **Text Sanitization**: Automatically strips malicious patterns before scoring.
+- **Mandatory Job Description Matching**:
+  - Evaluates resume directly against the job requirements (paste text or upload file).
+  - Identifies **Matched Skills** vs **Missing Skills** required by the role.
+- **Resume Mistake & Weakness Analysis ("Kya galti thi isme")**:
+  - Detects missing core sections (`Contact`, `Experience`, `Education`, `Skills`, `Summary`).
+  - Flags missing critical keywords and technologies found in the job description.
+  - Assesses word count (flags resumes that are too brief or excessively long).
+  - Flags low contextual semantic similarity.
+- **Actionable Score Improvement Guide ("Score ko kaise badha skti hun")**:
+  - Concrete suggestions on which keywords to incorporate.
+  - Specific section additions and restructuring advice.
+  - Optimal length guidance (recommended 400–800 words).
+  - High-impact bullet point phrasing tips.
 
-1. Clone or copy this repository to your local machine.
-2. Install the required dependencies:
+---
 
+## 📦 Installation
+
+1. Clone this repository:
+   ```bash
+   git clone https://github.com/lalamansingh/Resume-Detection-ATS-Scoring-System-.git
+   cd Resume-Detection-ATS-Scoring-System-
+   ```
+
+2. Install dependencies:
    ```bash
    pip install -r requirements.txt
    ```
 
-   Note: You may need to install system dependencies for pdfminer and python-docx.
+---
 
-## Usage
+## 🖥️ Usage
 
-### Command Line Interface (CLI)
+### Web Application (Streamlit)
 
-To analyze a resume file and detect SQL injection:
-
-```bash
-python main.py path/to/resume.pdf
-```
-
-### With Job Description for Semantic Similarity
-
-To include semantic similarity scoring (requires a job description file):
-
-```bash
-python main.py path/to/resume.pdf --job_desc path/to/job_description.txt
-```
-
-### To Avoid Sanitization (Detection Only)
-
-If you only want to detect SQL injection without sanitizing the text:
-
-```bash
-python main.py path/to/resume.pdf --no_sanitize
-```
-
-### Save Results to JSON
-
-To save the results to a JSON file:
-
-```bash
-python main.py path/to/resume.pdf --output results.json
-```
-
-### Web Interface (Streamlit)
-
-For an easy-to-use graphical interface:
+Launch the interactive web UI:
 
 ```bash
 streamlit run streamlit_app.py
 ```
 
-This will open a web browser at `http://localhost:8501` where you can:
-- Upload resume files (PDF, DOCX, TXT)
-- Optionally upload a job description file
-- Choose whether to sanitize SQL injection
-- View the results: SQL injection detection, ATS scores, etc.
-- Download results as JSON
+Open `http://localhost:8501` in your browser:
+1. Upload your resume (`.pdf`, `.docx`, or `.txt`).
+2. Provide the target Job Description (paste text or upload file).
+3. Click **"Analyze Resume & Calculate ATS Score"**.
+4. View detected security threats, ATS scores, identified weaknesses, and improvement recommendations.
+5. Download the complete analysis report as JSON.
 
-## Output
+### Command Line Interface (CLI)
 
-The program outputs a JSON object with the following fields:
-
-- `resume_file`: Path to the processed resume file.
-- `sql_injection_detected`: Boolean indicating if SQL injection was detected.
-- `sql_injection_matches`: List of detected SQL injection patterns.
-- `sanitized`: Boolean indicating if the text was sanitized (only if detection was positive and `--no_sanitize` was not used).
-- `ats_scores`: Dictionary containing individual scores:
-  - `section_presence`: Score based on presence of standard resume sections.
-  - `keyword_density`: Score based on density of ATS-relevant keywords.
-  - `length`: Score based on resume length (ideal around 400-800 words).
-  - `semantic_similarity`: Score based on semantic similarity with job description (if provided).
-- `ats_score_percentage`: Overall ATS score as a percentage (0-100).
-
-## Example
+To analyze a resume and compute ATS score against a job description:
 
 ```bash
-$ python main.py sample_resume.pdf --job_desc sample_job.txt --output result.json
+python main.py sample_resume.txt --job_desc sample_job.txt
+```
+
+To save results to JSON:
+
+```bash
+python main.py sample_resume.txt --job_desc sample_job.txt --output result.json
+```
+
+---
+
+## 📊 Sample Output
+
+```json
 {
-  "resume_file": "sample_resume.pdf",
+  "resume_file": "sample_resume.txt",
   "sql_injection_detected": false,
   "sql_injection_matches": [],
+  "prompt_injection_detected": false,
+  "prompt_injection_matches": [],
   "sanitized": false,
-  "ats_scores": {
-    "section_presence": 0.75,
-    "keyword_density": 0.6,
-    "length": 0.9,
-    "semantic_similarity": 0.85
-  },
-  "ats_score_percentage": 78.0
+  "ats_score_percentage": 85.0,
+  "mistakes": [
+    "Missing Job Description Skills: Found 1 skills/technologies mentioned in the job description that are absent from your resume: agile.",
+    "Resume Too Brief: Your resume has only 85 words (ideal length is 400-800 words)."
+  ],
+  "recommendations": [
+    "Incorporate these key skills from the job description naturally into your Skills and Experience bullet points: agile.",
+    "Expand your resume to at least 400-600 words. Add details on project scope, tools used, and measurable outcomes.",
+    "Use clear bullet points starting with strong action verbs and quantify results with metrics."
+  ]
 }
 ```
 
-## Customization
+---
 
-- **SQL Injection Detection**: Modify `sql_injection_detector.py` to add/remove regex patterns or adjust the whitelist.
-- **ATS Scoring**: Adjust weights in `ats_scorer.py` or modify the keyword list and section definitions.
-- **Resume Parsing**: Extend `resume_parser.py` to support additional file formats.
+## 📜 License
 
-## License
-
-MIT
-
-## Disclaimer
-
-This tool is for educational purposes and should not be relied upon for production use without thorough testing and validation. SQL injection detection via regex is not foolproof and should be complemented with other security measures. ATS scoring is a heuristic and may not reflect actual ATS behavior.
+MIT License

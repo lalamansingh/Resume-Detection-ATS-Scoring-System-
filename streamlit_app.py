@@ -9,7 +9,7 @@ from ats_scorer import ATSScorer
 
 # Set page config
 st.set_page_config(
-    page_title="Resume SQL Detection & ATS Scorer",
+    page_title="Resume Security & ATS Scoring System",
     page_icon="📄",
     layout="wide"
 )
@@ -34,7 +34,8 @@ This application helps you:
 1. **Detect SQL injection attempts** in resume files
 2. **Detect prompt injection attempts** in resume files
 3. **Sanitize resumes** by removing malicious patterns
-4. **Calculate ATS scores** to see how well your resume would perform in Applicant Tracking Systems
+4. **Calculate ATS scores** and identify specific resume mistakes against a required Job Description
+5. **Get actionable recommendations** on how to increase your ATS score
 """)
 
 # Sidebar for options
@@ -50,12 +51,12 @@ sanitize_prompt_option = st.sidebar.checkbox(
     help="If checked, detected prompt injection patterns will be removed from the resume text before scoring"
 )
 
-# File upload section
-st.header("📁 Upload Files")
+# Input section
+st.header("📁 Input Files & Job Description")
 col1, col2 = st.columns(2)
 
 with col1:
-    st.subheader("Resume File")
+    st.subheader("1. Resume File *(Required)*")
     resume_file = st.file_uploader(
         "Upload your resume (PDF, DOCX, or TXT)",
         type=["pdf", "docx", "txt"],
@@ -63,31 +64,62 @@ with col1:
     )
 
 with col2:
-    st.subheader("Job Description (Optional)")
-    job_desc_file = st.file_uploader(
-        "Upload job description for better ATS scoring (TXT)",
-        type=["txt"],
-        key="job_desc_upload"
+    st.subheader("2. Job Description *(Mandatory for ATS Scoring)*")
+    jd_input_method = st.radio(
+        "Select Job Description input method:",
+        ["Paste Text", "Upload File"],
+        horizontal=True
     )
 
-# Process button
-if st.button("🔍 Analyze Resume", type="primary"):
-    if resume_file is None:
-        st.error("Please upload a resume file.")
+    job_desc_text = ""
+    job_desc_file = None
+
+    if jd_input_method == "Paste Text":
+        job_desc_text = st.text_area(
+            "Paste the target Job Description:",
+            placeholder="Paste requirements, responsibilities, and required skills here...",
+            height=160
+        )
     else:
-        # Create temporary files
+        job_desc_file = st.file_uploader(
+            "Upload job description file (TXT, PDF, or DOCX)",
+            type=["txt", "pdf", "docx"],
+            key="job_desc_upload"
+        )
+
+# Process button
+if st.button("🔍 Analyze Resume & Calculate ATS Score", type="primary"):
+    # Validation
+    if resume_file is None:
+        st.error("❌ Please upload a resume file to proceed.")
+    else:
+        resume_path = None
+        job_desc_path = None
+        extracted_job_desc = ""
+
+        # Extract Job Description text if provided
+        if jd_input_method == "Paste Text":
+            extracted_job_desc = job_desc_text.strip()
+        elif job_desc_file is not None:
+            suffix = os.path.splitext(job_desc_file.name)[1].lower()
+            with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp_job:
+                tmp_job.write(job_desc_file.getvalue())
+                job_desc_path = tmp_job.name
+            try:
+                extracted_job_desc = parse_resume(job_desc_path).strip()
+            except Exception as e:
+                st.error(f"Failed to read job description file: {e}")
+
+        # Check mandatory requirement for Job Description
+        has_job_desc = bool(extracted_job_desc)
+
+        # Create temporary resume file
         with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(resume_file.name)[1]) as tmp_resume:
             tmp_resume.write(resume_file.getvalue())
             resume_path = tmp_resume.name
 
-        job_desc_path = None
-        if job_desc_file is not None:
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".txt", mode='w') as tmp_job:
-                tmp_job.write(job_desc_file.getvalue().decode('utf-8'))
-                job_desc_path = tmp_job.name
-
         try:
-            # Parse resume
+            # 1. Parse resume
             with st.spinner("Extracting text from resume..."):
                 resume_text = parse_resume(resume_path)
 
@@ -95,37 +127,41 @@ if st.button("🔍 Analyze Resume", type="primary"):
             with st.expander("📄 View Extracted Resume Text"):
                 st.text_area("Resume Content", resume_text, height=200, disabled=True)
 
-            # SQL Injection Detection
+            # 2. Security Analysis: SQL Injection Detection
             with st.spinner("Checking for SQL injection..."):
                 sql_detector = get_sql_detector()
                 sql_is_malicious, sql_matches = sql_detector.detect(resume_text)
 
-            # Prompt Injection Detection
+            # 3. Security Analysis: Prompt Injection Detection
             with st.spinner("Checking for prompt injection..."):
                 prompt_detector = get_prompt_detector()
                 prompt_is_malicious, prompt_matches = prompt_detector.detect(resume_text)
 
             # Display SQL injection results
-            st.header("🔒 SQL Injection Analysis")
-            if sql_is_malicious:
-                st.error(f"⚠️ **SQL Injection Detected!** Found {len(sql_matches)} suspicious pattern(s).")
-                with st.expander("View Detected Patterns"):
-                    for i, match in enumerate(sql_matches, 1):
-                        st.write(f"{i}. `{match}`")
-            else:
-                st.success("✅ **No SQL injection detected.** Your resume appears to be clean.")
+            st.header("🔒 Security Analysis")
+            sec_col1, sec_col2 = st.columns(2)
 
-            # Display prompt injection results
-            st.header("🛡️ Prompt Injection Analysis")
-            if prompt_is_malicious:
-                st.error(f"⚠️ **Prompt Injection Detected!** Found {len(prompt_matches)} suspicious pattern(s).")
-                with st.expander("View Detected Patterns"):
-                    for i, match in enumerate(prompt_matches, 1):
-                        st.write(f"{i}. `{match}`")
-            else:
-                st.success("✅ **No prompt injection detected.** Your resume appears to be clean.")
+            with sec_col1:
+                st.subheader("SQL Injection Check")
+                if sql_is_malicious:
+                    st.error(f"⚠️ **SQL Injection Detected!** Found {len(sql_matches)} suspicious pattern(s).")
+                    with st.expander("View Detected SQL Patterns"):
+                        for i, match in enumerate(sql_matches, 1):
+                            st.code(match, language="sql")
+                else:
+                    st.success("✅ **No SQL injection detected.**")
 
-            # Determine if we need to sanitize and what text to use for scoring
+            with sec_col2:
+                st.subheader("Prompt Injection Check")
+                if prompt_is_malicious:
+                    st.error(f"⚠️ **Prompt Injection Detected!** Found {len(prompt_matches)} suspicious pattern(s).")
+                    with st.expander("View Detected Prompt Injection Patterns"):
+                        for i, match in enumerate(prompt_matches, 1):
+                            st.code(match)
+                else:
+                    st.success("✅ **No prompt injection detected.**")
+
+            # Determine text for scoring (with sanitization if enabled)
             text_to_score = resume_text
             sanitization_status = []
 
@@ -139,120 +175,135 @@ if st.button("🔍 Analyze Resume", type="primary"):
                     text_to_score = prompt_detector.sanitize(text_to_score)
                 sanitization_status.append("prompt injection patterns removed")
 
-            # Show sanitization info
             if sanitization_status:
-                st.info(f"🧹 Resume has been sanitized: {', '.join(sanitization_status)}.")
+                st.info(f"🧹 Resume sanitized: {', '.join(sanitization_status)}.")
+                with st.expander("View Sanitized Resume Text"):
+                    st.text_area("Sanitized Content", text_to_score, height=180, disabled=True)
+            elif sql_is_malicious or prompt_is_malicious:
+                st.warning("⚠️ Security threats were detected but NOT sanitized based on your options.")
 
-                # Show comparison if sanitization occurred
-                if sql_is_malicious and sanitize_sql_option or prompt_is_malicious and sanitize_prompt_option:
-                    with st.expander("View Sanitized Text"):
-                        st.text_area("Sanitized Content", text_to_score, height=200, disabled=True)
+            # 4. ATS Scoring & Weakness Analysis
+            st.header("📊 ATS Scoring & Feedback")
+
+            if not has_job_desc:
+                st.error("⚠️ **Job Description is Mandatory for ATS Scoring!**")
+                st.warning("Please paste or upload a Job Description above so the system can evaluate keyword matching, semantic alignment, and generate improvement tips.")
             else:
-                if sql_is_malicious or prompt_is_malicious:
-                    detected_threats = []
-                    if sql_is_malicious:
-                        detected_threats.append("SQL injection")
-                    if prompt_is_malicious:
-                        detected_threats.append("prompt injection")
+                with st.spinner("Evaluating resume against Job Description and calculating ATS score..."):
+                    scorer = get_ats_scorer()
+                    scores = scorer.score_resume(text_to_score, extracted_job_desc)
 
-                    threat_str = " and ".join(detected_threats)
-                    st.warning(f"⚠️ {threat_str.capitalize()} detected but NOT sanitized (as per your settings).")
+                overall_percentage = scores['overall'] * 100
+
+                # Summary Metric & Progress
+                st.subheader(f"Overall ATS Score: {overall_percentage:.1f}%")
+                st.progress(scores['overall'])
+
+                if overall_percentage >= 80:
+                    st.success("🎉 **Excellent!** Your resume is well-optimized and has strong alignment with this job.")
+                elif overall_percentage >= 60:
+                    st.info("👍 **Good!** Your resume has decent potential but needs targeted improvements.")
+                elif overall_percentage >= 40:
+                    st.warning("⚠️ **Fair.** Your resume is missing key requirements and sections needed to pass ATS screens.")
                 else:
-                    st.success("✅ **No security threats detected.** Your resume appears to be clean.")
+                    st.error("❌ **Poor.** Low alignment with job requirements. High risk of ATS rejection.")
 
-            # ATS Scoring
-            with st.spinner("Calculating ATS score..."):
-                job_description = None
-                if job_desc_path and os.path.exists(job_desc_path):
-                    with open(job_desc_path, 'r', encoding='utf-8') as f:
-                        job_description = f.read()
-
-                scorer = get_ats_scorer()
-                scores = scorer.score_resume(text_to_score, job_description)
-
-            # Display ATS scores
-            st.header("📊 ATS Scoring Results")
-
-            # Create columns for metrics
-            col1, col2, col3, col4 = st.columns(4)
-
-            with col1:
-                st.metric(
-                    label="Section Presence",
-                    value=f"{scores['section_presence']:.0%}",
-                    help="Score based on presence of standard resume sections (contact, experience, education, skills, summary)"
-                )
-
-            with col2:
-                st.metric(
-                    label="Keyword Density",
-                    value=f"{scores['keyword_density']:.0%}",
-                    help="Score based on density of ATS-relevant keywords"
-                )
-
-            with col3:
-                st.metric(
-                    label="Length Score",
-                    value=f"{scores['length']:.0%}",
-                    help="Score based on resume length (ideal around 400-800 words)"
-                )
-
-            if 'semantic_similarity' in scores:
+                # Metric Cards
+                col1, col2, col3, col4 = st.columns(4)
+                with col1:
+                    st.metric(
+                        label="Section Presence",
+                        value=f"{scores['section_presence']:.0%}",
+                        help=f"Detected sections: {', '.join(scores['found_sections'])}"
+                    )
+                with col2:
+                    st.metric(
+                        label="Skill & Keyword Match",
+                        value=f"{scores['keyword_density']:.0%}",
+                        help="Match percentage against skills required in the job description"
+                    )
+                with col3:
+                    st.metric(
+                        label="Length Score",
+                        value=f"{scores['length']:.0%}",
+                        help=f"Resume length: {scores['word_count']} words (ideal: 400-800 words)"
+                    )
                 with col4:
                     st.metric(
-                        label="Job Match",
+                        label="Semantic Similarity",
                         value=f"{scores['semantic_similarity']:.0%}",
-                        help="Semantic similarity between resume and job description"
+                        help="AI contextual alignment between your resume and the job description"
                     )
 
-            # Overall score
-            overall_percentage = scores['overall'] * 100
-            st.subheader("Overall ATS Score")
-            st.progress(scores['overall'])
-            st.markdown(f"### {overall_percentage:.1f}%")
+                # Mistakes / Weaknesses Section ("Kya galti thi isme")
+                st.markdown("---")
+                st.subheader("❌ Identified Resume Weaknesses ('Kya galti thi isme')")
+                st.caption("These issues negatively impacted your ATS score:")
 
-            # Interpretation
-            if overall_percentage >= 80:
-                st.success("🎉 Excellent! Your resume is well-optimized for ATS systems.")
-            elif overall_percentage >= 60:
-                st.info("👍 Good! Your resume should pass most ATS screenings.")
-            elif overall_percentage >= 40:
-                st.warning("⚠️ Fair. Consider improving your resume for better ATS compatibility.")
-            else:
-                st.error("❌ Poor. Your resume may struggle to pass ATS filters. Consider revising.")
+                for mistake in scores['mistakes']:
+                    st.error(f"• {mistake}")
 
-            # Detailed scores
-            with st.expander("📈 Detailed Scores"):
-                st.json(scores)
+                # Score Improvement Guide ("Score ko kaise badha skti hun")
+                st.markdown("---")
+                st.subheader("💡 How to Increase Your ATS Score ('Score ko kaise badha skti hun')")
+                st.caption("Apply these specific changes to boost your score and pass recruiter screening:")
 
-            # Download results
-            results = {
-                "resume_file": resume_file.name,
-                "sql_injection_detected": sql_is_malicious,
-                "sql_injection_matches": sql_matches,
-                "prompt_injection_detected": prompt_is_malicious,
-                "prompt_injection_matches": prompt_matches,
-                "sanitized_sql": sanitize_sql_option and sql_is_malicious,
-                "sanitized_prompt": sanitize_prompt_option and prompt_is_malicious,
-                "ats_scores": scores,
-                "ats_score_percentage": overall_percentage
-            }
+                for rec in scores['recommendations']:
+                    st.info(f"👉 {rec}")
 
-            st.download_button(
-                label="💾 Download Results as JSON",
-                data=json.dumps(results, indent=2),
-                file_name="resume_analysis_results.json",
-                mime="application/json"
-            )
+                # Skill Comparison Tags
+                st.markdown("---")
+                st.subheader("🎯 Job Description Skills Breakdown")
+                kw_col1, kw_col2 = st.columns(2)
+
+                with kw_col1:
+                    st.markdown("##### ✅ Matched Skills (Present in your resume)")
+                    if scores['matched_keywords']:
+                        tags = " ".join([f"`{k}`" for k in scores['matched_keywords']])
+                        st.markdown(tags)
+                    else:
+                        st.caption("None of the targeted job skills were found.")
+
+                with kw_col2:
+                    st.markdown("##### ⚠️ Missing Skills (Add these to your resume)")
+                    if scores['missing_keywords']:
+                        tags = " ".join([f"`{k}`" for k in scores['missing_keywords']])
+                        st.markdown(tags)
+                    else:
+                        st.caption("Great job! All identified job skills are present.")
+
+                # Detailed JSON View & Download
+                with st.expander("📈 View Complete ATS Analysis Data (JSON)"):
+                    st.json(scores)
+
+                results = {
+                    "resume_file": resume_file.name,
+                    "sql_injection_detected": sql_is_malicious,
+                    "sql_injection_matches": sql_matches,
+                    "prompt_injection_detected": prompt_is_malicious,
+                    "prompt_injection_matches": prompt_matches,
+                    "ats_scores": scores,
+                    "ats_score_percentage": overall_percentage,
+                    "mistakes": scores['mistakes'],
+                    "recommendations": scores['recommendations']
+                }
+
+                st.download_button(
+                    label="💾 Download Full Analysis Report as JSON",
+                    data=json.dumps(results, indent=2),
+                    file_name="resume_ats_analysis_report.json",
+                    mime="application/json"
+                )
 
         except Exception as e:
-            st.error(f"An error occurred: {str(e)}")
+            st.error(f"An error occurred during analysis: {str(e)}")
             st.exception(e)
 
         finally:
             # Clean up temporary files
             try:
-                os.unlink(resume_path)
+                if resume_path and os.path.exists(resume_path):
+                    os.unlink(resume_path)
                 if job_desc_path and os.path.exists(job_desc_path):
                     os.unlink(job_desc_path)
             except:
@@ -262,6 +313,6 @@ if st.button("🔍 Analyze Resume", type="primary"):
 st.markdown("---")
 st.markdown("""
 <div style='text-align: center'>
-    <p>Built with ❤️ using Streamlit | For educational purposes only</p>
+    <p>Built with ❤️ using Streamlit | AI-Powered Resume Security & ATS Scoring System</p>
 </div>
 """, unsafe_allow_html=True)
